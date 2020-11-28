@@ -14,7 +14,7 @@ struct File_Header
 	uint order;
 	uint capacity;
 	uint root;
-	uint nodeNum;
+	uint lastPage;
 };
 
 struct Page_Header
@@ -27,14 +27,14 @@ struct Page_Header
 
 struct Internal
 {
-	Page_Header ph;
+	Page_Header *ph;
 	BufType child;
-	void* attr;
+	void *attr;
 };
 
 struct Leaf
 {
-	Page_Header ph;
+	Page_Header *ph;
 	BufType page;
 	BufType slot;
 	void *attr;
