@@ -64,5 +64,6 @@ int main()
     }
     clock_t c6 = clock();
     cout << "finished delete in " << (double)(c6 - c5) / CLOCKS_PER_SEC << "s" << endl;
+    bpm.close();
     im.DestroyIndex("1", 1);
 }

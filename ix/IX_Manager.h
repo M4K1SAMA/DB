@@ -1,34 +1,33 @@
-#include "ix.h"
+#pragma once
+#include "IX.h"
 
-class IX_Manager
-{
+class IX_Manager {
     FileManager *fm;
     BufPageManager *bpm;
 
-public:
-    IX_Manager(FileManager *_fm, BufPageManager *_bpm) : fm(_fm), bpm(_bpm)
-    {
-    }
+   public:
+    IX_Manager(FileManager *_fm, BufPageManager *_bpm) : fm(_fm), bpm(_bpm) {}
 
-    ~IX_Manager()
-    {
-    }
+    ~IX_Manager() {}
 
-    bool CreateIndex(const char *fileName, int idx, AttrType attrType, int attrLen)
-    {
-        const char *fullName = (string(fileName) + string(".") + to_string(idx)).c_str();
-        if (!fm->createFile(fullName))
-            return false;
+    bool CreateIndex(const char *fileName, int idx, AttrType attrType,
+                     int attrLen) {
+        const char *fullName =
+            (string(fileName) + string(".") + to_string(idx)).c_str();
+        if (!fm->createFile(fullName)) return false;
         int fID;
-        if (!fm->openFile(fullName, fID))
-            return false;
+        if (!fm->openFile(fullName, fID)) return false;
         File_Header fh;
         fh.attrType = attrType;
         fh.attrLen = attrLen;
         // fh.capacity = 5;
         // fh.order = 6;
-        fh.capacity = (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) * 3 + attrLen) - 1 - 3;
-        fh.order = (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) + attrLen) - 1 - 3;
+        fh.capacity =
+            (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) * 3 + attrLen) -
+            1 - 3;
+        fh.order =
+            (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) + attrLen) - 1 -
+            3;
         fh.root = 1;
         fh.lastPage = 1;
         int index;
@@ -49,18 +48,16 @@ public:
         return true;
     }
 
-    bool DestroyIndex(const char *fileName, int idx)
-    {
+    bool DestroyIndex(const char *fileName, int idx) {
         return !remove((fileName + string(".") + to_string(idx)).c_str());
     }
 
-    bool OpenIndex(const char *fileName, int idx, int &fID)
-    {
-        return fm->openFile((fileName + string(".") + to_string(idx)).c_str(), fID);
+    bool OpenIndex(const char *fileName, int idx, int &fID) {
+        return fm->openFile((fileName + string(".") + to_string(idx)).c_str(),
+                            fID);
     }
 
-    bool CloseIndex(int fID)
-    {
+    bool CloseIndex(int fID) {
         bpm->close();
         return !fm->closeFile(fID);
     }
