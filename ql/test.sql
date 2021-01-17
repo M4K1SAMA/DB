@@ -1,0 +1,36 @@
+CREATE DATABASE orderDB2;
+USE orderDB2;
+DROP DATABASE orderDB2;
+use myDB;
+CREATE TABLE nationBack(
+n_nationkey INT(4) NOT NULL,
+n_name VARCHAR(25) NOT NULL,
+n_regionkey INT(4) NOT NULL,
+n_comment VARCHAR(152)
+);
+SHOW TABLES;
+DROP TABLE nationBack;
+DESC nation;
+INSERT INTO nation VALUES (0,'America',0, 'nothing left');
+INSERT INTO nation VALUES ('id86','America',0, 'nothing left');
+INSERT INTO orders VALUES (127664,315000,'F',6.5,'2018/2/29',0,'Clerk101',1,'nice service');
+DELETE FROM customer WHERE C_CUSTKEY=5;
+UPDATE partsupp SET PS_AVAILQTY=8774 WHERE PS_PARTKEY=12;
+SELECT * FROM customer WHERE C_NATIONKEY<10;
+select O_ORDERDATE, O_TOTALPRICE from orders where O_ORDERDATE='1996-01-02';
+SELECT C_PHONE,O_ORDERSTATUS FROM customer,orders where C_CUSTKEY=O_CUSTKEY AND C_NAME='Customer#000000001';
+UPDATE nation SET N_REGIONKEY = 316001 WHERE N_NATIONKEY=15;
+ALTER TABLE nation ADD n_comment_2 VARCHAR(32);
+ALTER TABLE nation drop n_comment_2;
+ALTER TABLE nation RENAME TO province;
+
+alter table nation drop primary key;
+ALTER TABLE nation ADD CONSTRAINT pk PRIMARY KEY (N_NATIONKEY);
+
+ALTER TABLE nation ADD CONSTRAINT NATION_FK1 FOREIGN KEY (N_REGIONKEY) references region(R_REGIONKEY);
+ALTER TABLE nation DROP FOREIGN KEY NATION_FK1;
+ALTER TABLE customer ADD INDEX Idx_residual(C_ACCTBAL);
+ALTER TABLE customer DROP INDEX Idx_residual;
+
+
+SELECT C_NAME, O_ORDERSTATUS, N_NATIONKEY FROM customer,orders,nation  WHERE C_CUSTKEY=O_CUSTKEY AND C_NATIONKEY=N_NATIONKEY and N_NAME='CHINA                    ';
