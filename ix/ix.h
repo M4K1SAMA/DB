@@ -8,7 +8,7 @@
 #include "../filesystem/fileio/FileManager.h"
 #include "../filesystem/utils/pagedef.h"
 
-struct File_Header {
+struct IX_File_Header {
     AttrType attrType;
     uint attrLen;
     uint order;

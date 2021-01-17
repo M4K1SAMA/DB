@@ -8,7 +8,7 @@
 #include "../filesystem/fileio/FileManager.h"
 #include "../filesystem/utils/pagedef.h"
 
-struct File_Header {
+struct RM_File_Header {
     uint recordSize;
     uint pageNum;
     uint recordPerPage;

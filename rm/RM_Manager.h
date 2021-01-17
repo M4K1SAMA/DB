@@ -15,17 +15,19 @@ class RM_Manager {
         fm->createFile(fileName);
         int fID;
         fm->openFile(fileName, fID);
-        File_Header header;
+        // cout << "Create and open file " << fileName << ' ' << fID << endl;
+        RM_File_Header header;
         header.recordSize = recordSize;
-        header.pageNum = 1;
+        header.pageNum = 0;
         header.recordPerPage =
             ((PAGE_SIZE << 3) - 64) / (1 + (recordSize << 3));
-        header.bitmapSize = (header.recordPerPage) >> 3;
+        // cout << header.recordPerPage << " records" << endl;
+        header.bitmapSize = ((header.recordPerPage) >> 3) + 1;
         header.firstFreePage = 1;
         int idx;
         BufType b = bpm->getPage(fID, 0, idx);
         bpm->markDirty(idx);
-        memcpy(b, &header, sizeof(File_Header));
+        memcpy(b, &header, sizeof(RM_File_Header));
         bpm->close();
         fm->closeFile(fID);
         return true;

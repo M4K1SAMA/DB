@@ -1,3 +1,4 @@
+#pragma once
 #include <algorithm>
 
 #include "IX.h"
@@ -9,7 +10,7 @@ class IX_Handle {
     FileManager *fm;
     BufPageManager *bpm;
     int fID;
-    File_Header header;
+    IX_File_Header header;
     Internal internals[INTERNAL];
     bool inter_used[INTERNAL];
     Leaf leafs[LEAF];
@@ -72,7 +73,7 @@ class IX_Handle {
     void write_back_file_header() {
         int index;
         BufType h = bpm->getPage(fID, 0, index);
-        memcpy(h, &header, sizeof(File_Header));
+        memcpy(h, &header, sizeof(IX_File_Header));
         bpm->markDirty(index);
     }
 
@@ -84,12 +85,12 @@ class IX_Handle {
         int index;
         BufType buf = bpm->getPage(fID, 0, index);
         // header = (File_Header *)buf;
-        memcpy(&header, buf, sizeof(File_Header));
+        memcpy(&header, buf, sizeof(IX_File_Header));
     }
 
     ~IX_Handle() {}
 
-    bool InsertEntry(void *pdata, const RID &rid) {
+    bool InsertEntry(const void *pdata, const RID &rid) {
         // cout << "inserting " << rid.page << endl;
         uint id = header.root;
         Page_Header *curheader;
@@ -124,7 +125,7 @@ class IX_Handle {
                     //     // cout << attr_start[i] << ' ';
                     // }
                     // // cout << endl;
-                } else if (header.attrType == FLOAT) {
+                } else if (header.attrType == FLOAT_T) {
                     float *attr_start = (float *)(leaf->attr);
                     float data = *((float *)(pdata));
                     int i = lower_bound(attr_start,
@@ -140,8 +141,29 @@ class IX_Handle {
                     memmove(slot_start + i + 1, slot_start + i,
                             (curheader->eleNum - i) * sizeof(uint));
                     slot_start[i] = rid.slot;
+                } else if (header.attrType == STRING) {
+                    char *attr_start = (char *)(leaf->attr);
+                    string data((char *)pdata, header.attrLen);
+                    vector<string> strs;
+                    for (int i = 0; i < curheader->eleNum; ++i) {
+                        strs.push_back(string(attr_start + i * header.attrLen,
+                                              header.attrLen));
+                    }
+                    int i = lower_bound(strs.begin(), strs.end(), data) -
+                            strs.begin();
+                    memmove(attr_start + (i + 1) * header.attrLen,
+                            attr_start + i * header.attrLen,
+                            (curheader->eleNum - i) * header.attrLen);
+                    memcpy(attr_start + i * header.attrLen, data.c_str(),
+                           header.attrLen);
+                    BufType page_start = leaf->page, slot_start = leaf->slot;
+                    memmove(page_start + i + 1, page_start + i,
+                            (curheader->eleNum - i) * sizeof(uint));
+                    page_start[i] = rid.page;
+                    memmove(slot_start + i + 1, slot_start + i,
+                            (curheader->eleNum - i) * sizeof(uint));
+                    slot_start[i] = rid.slot;
                 }
-                // STRING
                 ++curheader->eleNum;
                 release_leaf(leaf);
                 while ((curheader->isLeaf &&
@@ -192,8 +214,8 @@ class IX_Handle {
                     BufType splitPage = bpm->getPage(fID, splitId, index);
                     bpm->markDirty(index);
                     if (curheader->isLeaf) {
-                        // cout << "leaf split " << id << " and " << splitId <<
-                        // endl;
+                        // cout << "leaf split " << id << " and " << splitId
+                        // << endl;
                         Leaf *news = make_leaf(splitPage);
                         Leaf *origin = make_leaf(page);
                         news->ph->isLeaf = true;
@@ -242,7 +264,8 @@ class IX_Handle {
                         release_leaf(news);
                         release_leaf(origin);
                     } else {
-                        // cout << "internal split " << id << " and " << splitId
+                        // cout << "internal split " << id << " and " <<
+                        // splitId
                         // << endl;
                         Internal *news = make_internal(splitPage);
                         Internal *origin = make_internal(page);
@@ -314,12 +337,23 @@ class IX_Handle {
                     // cout << internal->child[i] << ' ';
                     // cout << endl;
                     id = internal->child[l - start];
-                } else if (header.attrType == FLOAT) {
+                } else if (header.attrType == FLOAT_T) {
                     float *start = (float *)(internal->attr);
                     float data = *((float *)(pdata));
                     auto l =
                         lower_bound(start, start + curheader->eleNum, data);
                     id = internal->child[l - start];
+                } else if (header.attrType == STRING) {
+                    char *attr_start = (char *)(internal->attr);
+                    string data((char *)pdata, header.attrLen);
+                    vector<string> strs;
+                    for (int i = 0; i < curheader->eleNum; ++i) {
+                        strs.push_back(string(attr_start + i * header.attrLen,
+                                              header.attrLen));
+                    }
+                    int i = lower_bound(strs.begin(), strs.end(), data) -
+                            strs.begin();
+                    id = internal->child[i];
                 }
                 release_internal(internal);
             }
@@ -342,8 +376,8 @@ class IX_Handle {
             if (curheader->isLeaf) {
                 // cout << id << " is a leaf" << endl;
                 Leaf *leaf = make_leaf(page);
-                // cout << "via leaf " << id << " with " << curheader->eleNum <<
-                // " elements" << endl;
+                // cout << "via leaf " << id << " with " <<
+                // curheader->eleNum << " elements" << endl;
                 if (header.attrType == INTEGER) {
                     int *start = (int *)(leaf->attr);
                     for (int i = 0; i < curheader->eleNum; ++i) {
@@ -357,8 +391,8 @@ class IX_Handle {
                     if (i < curheader->eleNum && start[i] == data &&
                         leaf->page[i] == rid.page &&
                         leaf->slot[i] == rid.slot) {
-                        // cout << "found " << start[i] << " at " << i << " in
-                        // leaf " << id << endl;
+                        // cout << "found " << start[i] << " at " << i << "
+                        // in leaf " << id << endl;
                         memmove(start + i, start + i + 1,
                                 (curheader->eleNum - i - 1) * sizeof(int));
                         memmove(leaf->page + i, leaf->page + i + 1,
@@ -368,7 +402,7 @@ class IX_Handle {
                         bpm->markDirty(index);
                         ret = true;
                     }
-                } else if (header.attrType == FLOAT) {
+                } else if (header.attrType == FLOAT_T) {
                     float *start = (float *)(leaf->attr);
                     float data = *((float *)(pdata));
                     auto i =
@@ -379,6 +413,31 @@ class IX_Handle {
                         leaf->slot[i] == rid.slot) {
                         memmove(start + i, start + i + 1,
                                 (curheader->eleNum - i - 1) * sizeof(float));
+                        memmove(leaf->page + i, leaf->page + i + 1,
+                                (curheader->eleNum - i - 1) * sizeof(uint));
+                        memmove(leaf->slot + i, leaf->slot + i + 1,
+                                (curheader->eleNum - i - 1) * sizeof(uint));
+                        bpm->markDirty(index);
+                        ret = true;
+                    }
+                } else if (header.attrType == STRING) {
+                    char *start = (char *)(leaf->attr);
+                    string data((char *)pdata, header.attrLen);
+                    vector<string> strs;
+                    for (int i = 0; i < curheader->eleNum; ++i) {
+                        strs.push_back(
+                            string(start + i * header.attrLen, header.attrLen));
+                    }
+                    int i = lower_bound(strs.begin(), strs.end(), data) -
+                            strs.begin();
+                    if (i < curheader->eleNum &&
+                        strncmp(start + i * header.attrLen, data.c_str(),
+                                header.attrLen) == 0 &&
+                        leaf->page[i] == rid.page &&
+                        leaf->slot[i] == rid.slot) {
+                        memmove(start + i * header.attrLen,
+                                start + (i + 1) * header.attrLen,
+                                (curheader->eleNum - i - 1) * header.attrLen);
                         memmove(leaf->page + i, leaf->page + i + 1,
                                 (curheader->eleNum - i - 1) * sizeof(uint));
                         memmove(leaf->slot + i, leaf->slot + i + 1,
@@ -460,12 +519,23 @@ class IX_Handle {
                     auto l =
                         lower_bound(start, start + curheader->eleNum, data);
                     id = internal->child[l - start];
-                } else if (header.attrType == FLOAT) {
+                } else if (header.attrType == FLOAT_T) {
                     float *start = (float *)(internal->attr);
                     float data = *((float *)(pdata));
                     auto l =
                         lower_bound(start, start + curheader->eleNum, data);
                     id = internal->child[l - start];
+                } else if (header.attrType == STRING) {
+                    char *start = (char *)(internal->attr);
+                    string data((char *)pdata, header.attrLen);
+                    vector<string> strs;
+                    for (int i = 0; i < curheader->eleNum; ++i) {
+                        strs.push_back(
+                            string(start + i * header.attrLen, header.attrLen));
+                    }
+                    int i = lower_bound(strs.begin(), strs.end(), data) -
+                            strs.begin();
+                    id = internal->child[i];
                 }
                 // cout << "go " << id << endl;
                 release_internal(internal);
@@ -489,12 +559,23 @@ class IX_Handle {
                                     data) -
                         attr_start;
                 id = internal->child[i];
-            } else if (header.attrType == FLOAT) {
+            } else if (header.attrType == FLOAT_T) {
                 float *attr_start = (float *)(internal->attr);
                 float data = *((float *)(pdata));
                 int i = lower_bound(attr_start, attr_start + curheader->eleNum,
                                     data) -
                         attr_start;
+                id = internal->child[i];
+            } else if (header.attrType == STRING) {
+                char *start = (char *)(internal->attr);
+                string data((char *)pdata, header.attrLen);
+                vector<string> strs;
+                for (int i = 0; i < curheader->eleNum; ++i) {
+                    strs.push_back(
+                        string(start + i * header.attrLen, header.attrLen));
+                }
+                int i =
+                    lower_bound(strs.begin(), strs.end(), data) - strs.begin();
                 id = internal->child[i];
             }
             release_internal(internal);
@@ -514,13 +595,30 @@ class IX_Handle {
                 release_leaf(leaf);
                 return true;
             }
-        } else if (header.attrType == FLOAT) {
+        } else if (header.attrType == FLOAT_T) {
             float *attr_start = (float *)(leaf->attr);
             float data = *((float *)(pdata));
             int i =
                 lower_bound(attr_start, attr_start + curheader->eleNum, data) -
                 attr_start;
             if (i < curheader->eleNum && data == attr_start[i]) {
+                rid.page = leaf->page[i];
+                rid.slot = leaf->slot[i];
+                release_leaf(leaf);
+                return true;
+            }
+        } else if (header.attrType == STRING) {
+            char *attr_start = (char *)(leaf->attr);
+            string data((char *)pdata, header.attrLen);
+            vector<string> strs;
+            for (int i = 0; i < curheader->eleNum; ++i) {
+                strs.push_back(
+                    string(attr_start + i * header.attrLen, header.attrLen));
+            }
+            int i = lower_bound(strs.begin(), strs.end(), data) - strs.begin();
+            if (i < curheader->eleNum &&
+                strncmp(data.c_str(), attr_start + i * header.attrLen,
+                        header.attrLen) == 0) {
                 rid.page = leaf->page[i];
                 rid.slot = leaf->slot[i];
                 release_leaf(leaf);

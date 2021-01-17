@@ -10,24 +10,23 @@ class IX_Manager {
 
     ~IX_Manager() {}
 
-    bool CreateIndex(const char *fileName, int idx, AttrType attrType,
+    bool CreateIndex(const char *fileName, string idxName, AttrType attrType,
                      int attrLen) {
         const char *fullName =
-            (string(fileName) + string(".") + to_string(idx)).c_str();
+            (string(fileName) + string(".") + idxName).c_str();
         if (!fm->createFile(fullName)) return false;
         int fID;
         if (!fm->openFile(fullName, fID)) return false;
-        File_Header fh;
+        IX_File_Header fh;
         fh.attrType = attrType;
         fh.attrLen = attrLen;
-        // fh.capacity = 5;
-        // fh.order = 6;
         fh.capacity =
-            (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) * 3 + attrLen) -
+            (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) * 2 + attrLen) -
             1 - 3;
         fh.order =
             (PAGE_SIZE - sizeof(Page_Header)) / (sizeof(uint) + attrLen) - 1 -
             3;
+        // cout << fh.capacity << ' ' << fh.order << endl;
         fh.root = 1;
         fh.lastPage = 1;
         int index;
@@ -48,13 +47,12 @@ class IX_Manager {
         return true;
     }
 
-    bool DestroyIndex(const char *fileName, int idx) {
-        return !remove((fileName + string(".") + to_string(idx)).c_str());
+    bool DestroyIndex(const char *fileName, string idxName) {
+        return !remove((fileName + string(".") + idxName).c_str());
     }
 
-    bool OpenIndex(const char *fileName, int idx, int &fID) {
-        return fm->openFile((fileName + string(".") + to_string(idx)).c_str(),
-                            fID);
+    bool OpenIndex(const char *fileName, string idxName, int &fID) {
+        return fm->openFile((fileName + string(".") + idxName).c_str(), fID);
     }
 
     bool CloseIndex(int fID) {

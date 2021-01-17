@@ -1,16 +1,21 @@
+#pragma once
 #include "RM.h"
 
-bool bit(BufType bitmap, int pos) {
+inline bool getBit(BufType bitmap, int pos) {
     return bitmap[pos >> 5] & (1 << (pos & 31));
 }
 
-void set(BufType bitmap, int pos) { bitmap[pos >> 5] |= (1 << (pos & 31)); }
+inline void setBit(BufType bitmap, int pos) {
+    bitmap[pos >> 5] |= (1 << (pos & 31));
+}
 
-void reset(BufType bitmap, int pos) { bitmap[pos >> 5] &= ~(1 << (pos & 31)); }
+inline void resetBit(BufType bitmap, int pos) {
+    bitmap[pos >> 5] &= ~(1 << (pos & 31));
+}
 
-int firstIdle(BufType bitmap, uint size) {
+inline int firstIdle(BufType bitmap, uint size) {
     for (uint i = 0; i < size; ++i) {
-        if (!bit(bitmap, i)) return i;
+        if (!getBit(bitmap, i)) return i;
     }
     return -1;
 }
@@ -18,16 +23,15 @@ int firstIdle(BufType bitmap, uint size) {
 class RM_FileHandle {
     FileManager *fm;
     BufPageManager *bpm;
-    int fID;
 
    public:
-    File_Header header;
+    RM_File_Header header;
+    int fID;
     RM_FileHandle(FileManager *_fm, BufPageManager *_bpm, int _fID)
         : fm(_fm), bpm(_bpm), fID(_fID) {
         int idx;
         BufType b = bpm->getPage(fID, 0, idx);
-        memcpy(&header, b, sizeof(File_Header));
-        bpm->access(idx);
+        memcpy(&header, b, sizeof(RM_File_Header));
     }
 
     ~RM_FileHandle() {}
@@ -36,11 +40,11 @@ class RM_FileHandle {
         int idx;
         BufType page = bpm->getPage(fID, rid.page, idx);
         bpm->access(idx);
-        if (!bit(page + 2, rid.slot)) return false;
-        memcpy(data,
-               page + 2 +
-                   ((header.bitmapSize + rid.slot * header.recordSize) >> 2),
-               header.recordSize);
+        if (!getBit(page + 2, rid.slot)) return false;
+        memcpy(
+            data,
+            (char *)page + 8 + header.bitmapSize + rid.slot * header.recordSize,
+            header.recordSize);
         return true;
     }
 
@@ -48,18 +52,21 @@ class RM_FileHandle {
         int idx;
         rid.page = header.firstFreePage;
         BufType page = bpm->getPage(fID, rid.page, idx);
-        if (page[0] == 0) {
+        if (rid.page > header.pageNum) {
+            assert(rid.page == header.pageNum + 1);
+            memset(page, 0, PAGE_SIZE);
             page[0] = rid.page + 1;
+            ++header.pageNum;
         }
         rid.slot = firstIdle(page + 2, (header.bitmapSize << 3));
-        memcpy(page + 2 +
-                   ((header.bitmapSize + rid.slot * header.recordSize) >> 2),
-               Rec, header.recordSize);
-        set(page + 2, rid.slot);
+        memcpy(
+            (char *)page + 8 + header.bitmapSize + rid.slot * header.recordSize,
+            Rec, header.recordSize);
+        setBit(page + 2, rid.slot);
         if (++(page[1]) == header.recordPerPage) header.firstFreePage = page[0];
         bpm->markDirty(idx);
         page = bpm->getPage(fID, 0, idx);
-        memcpy(page, &header, sizeof(File_Header));
+        memcpy(page, &header, sizeof(RM_File_Header));
         bpm->markDirty(idx);
         return true;
     }
@@ -67,14 +74,31 @@ class RM_FileHandle {
     bool DeleteRec(const RID &rid) {
         int idx;
         BufType page = bpm->getPage(fID, rid.page, idx);
-        reset(page + 2, rid.slot);
+        if (!getBit(page + 2, rid.slot)) return false;
+        resetBit(page + 2, rid.slot);
         bpm->markDirty(idx);
-        if ((page[1])-- == header.recordPerPage) {
+        --(page[1]);
+        if (page[1] == 0) {
+            if (rid.page == header.pageNum) {
+                cout << "delete last page" << endl;
+                memset(page, 0, PAGE_SIZE);
+            } else if (rid.page < header.pageNum) {
+                BufType tail = bpm->getPage(fID, header.pageNum, idx);
+                bpm->markDirty(idx);
+                memcpy(page, tail, PAGE_SIZE);
+                page[0] = header.pageNum;
+                cout << "swap tail and " << rid.page << endl;
+                cout << header.pageNum << endl;
+            }
+            --header.pageNum;
+        }
+        if ((page[1]) == header.recordPerPage - 1) {
             page[0] = header.firstFreePage;
             header.firstFreePage = rid.page;
+            // cout << "first changed to " << header.firstFreePage << endl;
         }
         BufType head = bpm->getPage(fID, 0, idx);
-        memcpy(head, &head, sizeof(File_Header));
+        memcpy(head, &header, sizeof(RM_File_Header));
         bpm->markDirty(idx);
         return true;
     }
@@ -83,7 +107,7 @@ class RM_FileHandle {
         int idx;
         BufType page = bpm->getPage(fID, rid.page, idx);
         memcpy(
-            page + 2 + header.bitmapSize / 4 + rid.slot * header.recordSize / 4,
+            (char *)page + 8 + header.bitmapSize + rid.slot * header.recordSize,
             Rec, header.recordSize);
         bpm->markDirty(idx);
         return true;
